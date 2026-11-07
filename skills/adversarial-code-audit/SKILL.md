@@ -41,8 +41,11 @@ codex exec -C "<REPO>" -s read-only -m gpt-6-astra -c model_reasoning_effort=hig
   -o "$OUT" "$(cat <<'PROMPT'
 <the prompt below>
 PROMPT
-)"
+)" < /dev/null
 ```
+
+The `< /dev/null` matters: in a background shell, `codex exec` otherwise waits
+forever on stdin ("Reading additional input from stdin...") and never starts.
 
 If `codex` is missing or not logged in, stop and tell the user. Don't fall back
 to a Claude-only finder without asking, since that loses the second model.
