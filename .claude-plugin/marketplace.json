@@ -1,0 +1,14 @@
+{
+  "name": "dstack",
+  "description": "Darwin's personal Claude Code skills",
+  "owner": {
+    "name": "Darwin Lo"
+  },
+  "plugins": [
+    {
+      "name": "dstack",
+      "source": "./",
+      "description": "Darwin's personal skills"
+    }
+  ]
+}
