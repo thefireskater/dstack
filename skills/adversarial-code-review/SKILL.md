@@ -7,7 +7,7 @@ description: |
   session writes one ranked report. Use when the user asks for an adversarial
   code review, a whole-codebase code review, or a Codex review with disprovers.
   Not for a diff or PR: use /review or /codex challenge for those. For a
-  security-only audit, use /security-audit.
+  security-only audit, use /dstack:security-audit.
 allowed-tools:
   - Agent
   - Read
