@@ -32,11 +32,28 @@ If it's ambiguous, ask. Record the branch and short SHA (`git rev-parse --short 
 
 ## 1. Find (Astra)
 
+### Preflight
+
+Before the real run, confirm codex can start, is logged in, and can use the
+model. This takes seconds and costs almost nothing:
+
+```bash
+perl -e 'alarm shift; exec @ARGV' 90 \
+  codex exec -C "<REPO>" -s read-only -m gpt-6-astra "Reply with exactly: ok" < /dev/null
+```
+
+Continue only if the output ends with `ok`. If it times out, errors, or mentions
+login, auth, quota or the model, stop and tell the user what it printed. Don't
+fall back to a Claude-only finder without asking, since that loses the second model.
+
+### Run
+
 Fill in `<REPO>`, `<NAME>` and `<DATE>`, then run in the background (it took about
 8 minutes on a 44k-line repo):
 
 ```bash
 OUT=~/.claude/code-reviews/<NAME>-<DATE>-astra.md; mkdir -p ~/.claude/code-reviews
+touch ~/.claude/code-reviews/.<NAME>-<DATE>-start
 codex exec -C "<REPO>" -s read-only -m gpt-6-astra -c model_reasoning_effort=high \
   -o "$OUT" "$(cat <<'PROMPT'
 <the prompt below>
@@ -47,8 +64,25 @@ PROMPT
 The `< /dev/null` matters: in a background shell, `codex exec` otherwise waits
 forever on stdin ("Reading additional input from stdin...") and never starts.
 
-If `codex` is missing or not logged in, stop and tell the user. Don't fall back
-to a Claude-only finder without asking, since that loses the second model.
+### Watchdog
+
+Don't just wait for the background job. Check it is alive:
+
+```bash
+M=~/.claude/code-reviews/.<NAME>-<DATE>-start
+LOG=$(find ~/.codex/sessions -name '*.jsonl' -newer "$M" -exec ls -t {} + | head -1)
+echo "log: ${LOG:-none}"
+[ -n "$LOG" ] && echo "idle min: $(( ($(date +%s) - $(stat -f %m "$LOG")) / 60 ))"
+pgrep -f "codex exec -C <REPO> -s read-only -m gpt-6-astra -c" >/dev/null && echo running || echo exited
+```
+
+- **At 2 minutes:** a session log must exist. If it's `none` while codex is still
+  running, it's stuck. Read the background job's output, kill codex, fix the
+  cause, and rerun once.
+- **Every few minutes after that:** if the log hasn't changed in 5 minutes while
+  codex is running, treat it as stalled, kill it, and rerun once.
+- **Hard limit:** kill it at 30 minutes.
+- If the rerun also fails, stop and report what the output and log showed.
 
 Prompt (add one line naming the repo's trust surfaces if you know them, such as
 "staff, portfolio, and public surfaces"):
