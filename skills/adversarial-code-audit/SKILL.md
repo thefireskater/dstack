@@ -1,11 +1,11 @@
 ---
-name: adversarial-code-review
+name: adversarial-code-audit
 description: |
-  Read-only adversarial code review of an entire repo as it stands now. GPT-6
+  Read-only adversarial code audit of an entire repo as it stands now. GPT-6
   Astra (via `codex exec`) finds the ways the system will fail in production,
   then one fresh Claude agent per finding tries to disprove it, and the main
   session writes one ranked report. Use when the user asks for an adversarial
-  code review, a whole-codebase code review, or a Codex review with disprovers.
+  code audit or review of a whole repo, or a Codex review with disprovers.
   Not for a diff or PR: use /review or /codex challenge for those. For a
   security-only audit, use /dstack:security-audit.
 allowed-tools:
@@ -17,7 +17,7 @@ allowed-tools:
   - Write
 ---
 
-# Adversarial Code Review
+# Adversarial Code Audit
 
 Two models with different blind spots: Astra finds, Claude disproves. Run this in
 the main session, because subagents may not be able to launch their own.
@@ -51,16 +51,17 @@ Prompt (add one line naming the repo's trust surfaces if you know them, such as
 "staff, portfolio, and public surfaces"):
 
 ```text
-You are doing an adversarial code review of this repository as it stands now. It is not a diff review. Do not modify anything. Stay inside this repository. Do not read any .env file other than .env.example, and do not run anything that connects to a database or network.
+You are doing an adversarial code audit of this repository as it stands now. It is not a diff review. Do not modify anything. Stay inside this repository. Do not read any .env file other than .env.example, and do not run anything that connects to a database or network.
 
 Find the ways this system will fail in production or do the wrong thing. Think like a chaos engineer, a hostile user, and a maintainer who has to live with this code.
 
 Cover:
 - Correctness: behavior that contradicts what the code, tests, or docs claim
+- Edge cases and silent logic errors: boundary, empty, null, or huge inputs, off-by-one errors, and logic that returns wrong results without raising an error
 - Data integrity: data loss, silent corruption, partial writes, missing transactions, unsafe migrations
 - Concurrency: races, duplicate job execution, non-idempotent webhooks and retries
 - Failure modes: external integrations failing, timing out, rate limiting, or returning unexpected shapes; errors swallowed; resource leaks
-- Security: broken access control across the app's trust boundaries, injection, secret handling, unsafe file handling, SSRF
+- Security: broken access control across the app's trust boundaries, privilege escalation, injection, secret handling, unsafe file handling, SSRF, timing attacks
 - Tests that pass without proving the behavior they appear to cover
 
 Start by mapping entry points (routes, API handlers, server actions, jobs, webhooks, integrations) and trust boundaries, then go deep where the damage would be worst.
@@ -75,11 +76,13 @@ Return findings ranked by impact and likelihood. For each one:
 
 ### <number>. <title>
 - Severity: Critical / High / Medium / Low
-- Category: correctness / data-integrity / concurrency / failure-mode / security / test-quality
+- Category: correctness / edge-case / data-integrity / concurrency / failure-mode / security / test-quality
 - Location: file:line
 - Claim: one sentence
 - Path: the concrete input or state, the steps through the code, and the result
 - Fix: the specific change
+- Action: FIXABLE (you know the fix) or INVESTIGATE (needs human judgment)
+- Blocks: yes if it would fail a test, break production, or lose data or secrets; otherwise no
 
 End with a section listing which areas you examined closely and which you did not.
 ```
@@ -103,7 +106,8 @@ of Astra's output. Instruct it to:
   real `.env`. Running a small isolated snippet (such as timing a regex) is fine.
 - Return one verdict with `file:line` evidence: `CONFIRMED`, `PLAUSIBLE` (name
   what it depends on) or `REFUTED` (name what blocks it)
-- Give its own severity, and correct any overstated detail in the claim
+- Give its own severity, Action (FIXABLE or INVESTIGATE) and Blocks (yes or no),
+  and correct any overstated detail in the claim
 
 Don't re-verify in a second round. Record any verdict you override and why.
 
@@ -112,12 +116,12 @@ Don't re-verify in a second round. Record any verdict you override and why.
 Severity is the disprover's rating, with Astra's shown beside it. Drop `REFUTED`
 findings to a Refuted section. Write the report to the reviewer app:
 
-`~/Code/reviewer/content/<NAME>-adversarial-review-<DATE>.md`
+`~/Code/reviewer/content/<NAME>-adversarial-audit-<DATE>.md`
 
 If the file exists, append `-2`, `-3`, and so on. Structure:
 
 ```markdown
-# <NAME> adversarial code review
+# <NAME> adversarial code audit
 
 **Repo:** path, branch at SHA
 **Finder:** GPT-6 Astra via `codex exec`, whole repo, read-only
@@ -131,7 +135,7 @@ Counts by severity, how many survived, how many disprovers downgraded
 Top 3, each with why
 
 ## Findings
-Table: #, finding, severity, Astra's rating, category
+Table: #, finding, severity, Astra's rating, category, action, blocks
 Then per finding: Where, What happens, Why it's real, Limit, Fix
 
 ## Refuted
